@@ -50,33 +50,39 @@ def parse_discover(row):
     else:
         return None
 
+CHASE_SOURCES = {
+    'checking': 'Assets:US:Chase:Checking',
+    'savings': 'Assets:US:Chase:Savings',
+    'cf': 'Liabilities:US:Chase:Chase-Freedom'
+}
 
-def parse_chase_description(description, amount):
+
+def parse_chase_description(description, amount, sourcename):
+    source = CHASE_SOURCES[sourcename]
     if description.startswith('USC HOSPITALITY RETAIL'):
-        source = 'Assets:US:Chase:Checking'
-        target = 'Expenses:Restaurant'
+        target = 'Expenses:Restaurants'
         merchant = 'USC Hospitality Retail'
     elif description.startswith('DISCOVER'):
-        source = 'Assets:US:Chase:Checking'
         target = 'Liabilities:US:Discover:Discover-it'
         merchant = 'Discover'
     elif description.startswith('UNIVERSITY OF SO PAYROLL'):
-        source = 'Assets:US:Chase:Checking'
         target = 'Income:US:USC:RAship'
         merchant = 'USC'
     else:
-        source = 'Assets:US:Chase:Checking'
         target = 'TOFILL'
         merchant = description
     return source, target, merchant, amount
 
 
 
-def parse_chase(row):
-    Details,PostingDate,Description,Amount,Type,Balance,CheckorSlip, _ = row
+def parse_chase(row, sourcename):
+    if sourcename in ['checking', 'savings']:
+        Details,PostingDate,Description,Amount,Type,Balance,CheckorSlip, _ = row
+    else:
+        _, PostingDate, Description, _, _, Amount = row
     Amount = -float(Amount)
     date = datetime.strptime(PostingDate, '%m/%d/%Y')
-    source, target, merchant, amount = parse_chase_description(Description, Amount)
+    source, target, merchant, amount = parse_chase_description(Description, Amount, sourcename)
     return FavaJounralEntry(date, merchant, Description, source, target, amount)
 
 
@@ -94,8 +100,9 @@ def main():
         for row in reader:
             if args.converter == 'discover':
                 entry = parse_discover(row)
-            elif args.converter == 'chase':
-                entry = parse_chase(row)
+            elif args.converter.startswith('chase'):
+                chase_source = args.converter.split('-')[1]
+                entry = parse_chase(row, chase_source)
             else:
                 entry = None
             if entry is not None:
